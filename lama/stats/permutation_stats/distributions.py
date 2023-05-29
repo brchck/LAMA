@@ -322,6 +322,7 @@ def null(input_data: pd.DataFrame,
 
     label_names = input_data.drop(['staging', 'line'], axis='columns').columns
 
+
     # Store p-value and t-value results. One tuple (len==num labels) per iteration
     spec_p = []
 
@@ -337,6 +338,9 @@ def null(input_data: pd.DataFrame,
     # Split data into a numpy array of raw data and dataframe for staging and genotype fpr the LM code
     data = baselines.drop(columns=['staging', 'line']).values
     info = baselines[['staging', 'line']]
+
+    # just for testing rn
+    line_df = null_line(wt_indx_combinations, baselines, num_perm, two_way=two_way)
 
     # Get the specimen-level null distribution. i.e. the distributuion of p-values obtained from relabelling each
     # baseline once. Loop over each specimen and set to 'synth_hom'
@@ -477,6 +481,10 @@ def null_line(wt_indx_combinations: dict,
 
     cols = list(data.drop(['staging', 'genotype', 'treatment'], axis='columns').columns) if two_way else \
         list(data.drop(['staging', 'genotype'], axis='columns').columns)
+
+    # Apparently there may be spaces in the two_way radiomics data
+
+    cols = [col.strip(' ') for col in cols]
 
     # Run each label on a thread
     if two_way:

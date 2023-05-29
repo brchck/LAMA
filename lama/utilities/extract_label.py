@@ -23,7 +23,8 @@ def main(target_dir, labs_of_interest: list = [17]):
 
     # Just get the label and write them
     for i, path in enumerate(label_paths):
-        print(rigid_paths[i], path)
+        print("rigid path:", rigid_paths[i])
+        print("label path:", path)
 
         label, l_head = nrrd.read(path)
         rigid, r_head = nrrd.read(rigid_paths[i])
@@ -31,12 +32,15 @@ def main(target_dir, labs_of_interest: list = [17]):
 
         label[~np.isin(label, labs_of_interest)] = 0
 
+
         # get roi of label and rigid for scaling
         s = ndimage.find_objects(label)[-1]
 
 
         if isinstance(labs_of_interest, list):
-            t = ndimage.find_objects(label)[int(min(labs_of_interest))]
+
+            t = ndimage.find_objects(label)[int(min(labs_of_interest)-1)]
+
 
             midpoint = [np.mean([t[0].start, s[0].stop]),
                         np.mean([t[1].start, s[1].stop]),

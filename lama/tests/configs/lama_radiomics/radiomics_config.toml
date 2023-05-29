@@ -1,16 +1,20 @@
 # Radiomics config v1 - Kyle Drover
 
-target_dir = 'Z:/jcsmr/ROLab/Experimental data/Radiomics/Workflow design and trial results/Kyle Drover analysis/220617_BQ_norm_stage_full'
+target_dir = 'E:\220204_BQ_dataset\221218_BQ_run'
 
 # labels of interest
 labs_of_int = '1'
 
-norm_methods = ['subtraction']
+norm_methods = 'subtraction'
 
 norm_label = true
 
-spherify = true
+#spherify = 0
 
-ref_vol_path = 'E:/220710_BQ_ref_vol/200721_MPTLVo3_GFSeeds_4T1R_4T1R_D7_C1_002.nrrd'
+ref_vol_path = 'E:\220204_BQ_dataset\221218_BQ_run\radiomics_output\rigids\200721_MPTLVo3_GFSeeds_4T1R_4T1R_D7_C1_002.nrrd'
 
+
+mask_dir = ''
+
+scan_dir = ''
 

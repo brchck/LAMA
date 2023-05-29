@@ -25,6 +25,7 @@ from logzero import logger as logging
 from lama.common import getfile_startswith_endswith
 from lama.qc import formatting
 from lama.paths import specimen_iterator
+from tqdm import tqdm
 
 ORGAN_VOL_LABEL = 'organ volume'  # Y label
 WEV_LABEL = 'whole embryo volume'  # x label for scatter plots
@@ -73,17 +74,13 @@ def pvalue_dist_plots(null: pd.DataFrame, alt: pd.DataFrame, thresholds: pd.Data
 
     for col in alt:
         try:
-            thresh = thresholds.loc[int(col), 'p_thresh']
+            thresh = thresholds.loc[col, 'p_thresh']
             log_thresh = np.log(thresh)
 
             if two_way:
-                print(np.shape(alt[col])[-1])
-                print(np.shape(alt[col])[0])
 
                 p_number = 1 if np.squeeze(alt[col]).ndim == 1 else 3
-
                 for i in range(p_number):
-                    print(pd.Series(np.vstack(null[col].values)[:, i]))
                     hist(pd.Series(np.vstack(alt[col].values).transpose()[:, i]))
                     hist(pd.Series(np.vstack(null[col].values)[:, i]))
                     plt.axvline(log_thresh.iloc[i], 0, 1, alpha=0.4)
@@ -199,11 +196,9 @@ def make_plots(organ_vols: pd.DataFrame,
             hits = hits.merge(label_meta[['organ_system_name']], how='left', left_index=True, right_index=True)
             hits.sort_values(by='organ_system_name', inplace=True)
 
-            print(hits.columns)
-
         if skip_no_analysis:
             # Skip organ that are flagged with no_analysis in the atlas metadata file
-            # Kyle - this should be label meta
+            # Kyle - so I don't know why I have this line and it's stupid but it uses the label metadata column instead
             if 'no_analysis' not in hits:
                 hits = hits[label_meta['no_analysis'] != True]
 
@@ -214,8 +209,8 @@ def make_plots(organ_vols: pd.DataFrame,
         numcol = 6 if len(hits) > 5 else len(hits)
         numrows = math.ceil(len(hits) / numcol)
 
-        figsize_y = 5 * numrows
-        figsize_x = 5 * numcol
+        figsize_y = 7 * numrows
+        figsize_x = 7 * numcol
 
         fig = Figure(figsize=(figsize_x, figsize_y))
         FigureCanvas(fig)
@@ -232,13 +227,11 @@ def make_plots(organ_vols: pd.DataFrame,
         else:
             labels_to_plot = hits.index
 
-        print(labels_to_plot)
-
         # organ_vols[organ_vol] = (scattter_df[organ_vol] * um3_conv_factor) / um3_to_mm3_conv_factor
         # scattter_df[wev] = (scattter_df[wev] * um3_conv_factor) / um3_to_mm3_conv_factor
 
         # for i, (label, row) in enumerate(hits.iterrows()):
-        for i, label in enumerate(labels_to_plot):
+        for i, label in enumerate(tqdm(labels_to_plot)):
             if 'label_name' in hits:
                 label_name: str = hits.loc[label, 'label_name']
             else:
@@ -249,6 +242,7 @@ def make_plots(organ_vols: pd.DataFrame,
 
             label = str(label)
 
+
             try:
                 # Check if we have a label metadata file, whether it has a short_name col,
                 # and whether the current label as a short_name entry
@@ -256,7 +250,10 @@ def make_plots(organ_vols: pd.DataFrame,
                     label_name = label_meta.at[int(label), 'short_name']
                 else:
                     label_name = str(label_name)
-                title = label_name.replace('_', ' ')
+                # title is now dependent on if its rad data or not
+                title = str(label.split("__")[0] + " " + label_name).replace('_', ' ') if label.__contains__("__") else label_name.replace('_', ' ')
+
+
             except Exception:
                 print('p')
             # Scatterplot
@@ -266,8 +263,15 @@ def make_plots(organ_vols: pd.DataFrame,
             if two_way:
                 scatter_df = organ_vols
                 scatter_df = scatter_df[[label, WEV_LABEL, 'line']]
-                scatter_df.rename(columns={label: label_name, 'line': 'condition'}, inplace=True)
-                sax = sns.scatterplot(y=label_name, x=WEV_LABEL, ax=s_axes, hue='condition',
+
+                # replace the label if organ data, ignore it if its radiomics data (index contains __)
+                if scatter_df.columns[0].__contains__("__"):
+                    scatter_df.rename(columns={'line': 'condition'}, inplace=True)
+                    sax = sns.scatterplot(y=label, x=WEV_LABEL, ax=s_axes, hue='condition',
+                                          data=scatter_df)
+                else:
+                    scatter_df.rename(columns={label: label_name, 'line': 'condition'}, inplace=True)
+                    sax = sns.scatterplot(y=label_name, x=WEV_LABEL, ax=s_axes, hue='condition',
                                       data=scatter_df)
 
             else:

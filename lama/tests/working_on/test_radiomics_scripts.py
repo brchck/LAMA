@@ -1,5 +1,8 @@
 
 from pathlib import Path
+
+import joblib
+
 from lama.lama_radiomics.radiomics import radiomics_job_runner
 from lama import common
 import os
@@ -12,11 +15,34 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import pytest
 import numpy as np
-from lama.lama_radiomics import feature_reduction, machine_learning
+from lama.lama_radiomics import feature_reduction
+from lama.scripts import lama_machine_learning
 import pacmap
-@pytest.mark.skip
+from lama.scripts import lama_permutation_stats
+from lama.lama_radiomics import radiomics
+
+import SimpleITK as sitk
+stats_cfg = Path(
+    "C:/LAMA/lama/tests/configs/permutation_stats/perm_no_qc.yaml")
+
+from lama.stats.permutation_stats.run_permutation_stats import get_radiomics_data
+
+def test_denoising():
+    file_path = Path("E:/220204_BQ_dataset/221218_BQ_run/registrations/rigid/flipped/200721_MPTLVo3_CT_4T1_Ms_D7_C1_002.nrrd")
+
+    img = common.LoadImage(file_path).img
+    f_out = "E:/220204_BQ_dataset/221218_BQ_run/test.nrrd"
+
+    result = radiomics.denoise(img)
+    sitk.WriteImage(result, f_out)
+
+
+
+
+
 def test_radiomics():
-        c = cfg_load(Path("C:/Users/u5823099/Anaconda3/Lib/site-packages/lama/LAMA/lama/tests/configs/lama_radiomics/radiomics_config.toml"))
+        cpath =  Path('C:/LAMA/lama/tests/configs/lama_radiomics/radiomics_config_gina.toml')
+        c = cfg_load(cpath)
 
         target_dir = Path(c.get('target_dir'))
 
@@ -29,7 +55,9 @@ def test_radiomics():
 
         spherify = c.get('spherify')
 
-        ref_vol_path = Path(c.get('ref_vol_path'))
+        ref_vol_path = Path(c.get('ref_vol_path')) if c.get('ref_vol_path') is not None else None
+
+
 
         norm_dict = {
             "histogram": normalise.IntensityHistogramMatch(),
@@ -45,9 +73,10 @@ def test_radiomics():
 
             norm_meths = None
         logging.info("Starting Radiomics")
-        feature_reduction
+        radiomics_job_runner(target_dir, labs_of_int=labs_of_int, norm_method=normalise.IntensityHistogramMatch(), norm_label=norm_label,
+                             spherify=spherify, ref_vol_path=ref_vol_path, make_job_file=False)
 
-@pytest.mark.skip
+
 def test_radiomic_plotting():
     _dir = Path("E:/220607_two_way/g_by_back_data/radiomics_output/features/")
 
@@ -62,7 +91,8 @@ def test_radiomic_plotting():
         df.index.name = 'org'
         df.name = str(file_names[i]).split(".")[0].split("/")[-1]
         df['genotype'] = 'HET' if 'het' in str(file_names[i]) else 'WT'
-        df['background'] = 'C57BL6N' if (('b6ku' in str(file_names[i]))|('BL6' in str(file_names[i]))) else 'C3HHEH'
+        df['background'] = 'C57BL6N' if (('b6ku' in str(file_names[i]))|('BL6' in str(file_names[i]))) else \
+            'F1' if ('F1' in str(file_names[i])) else 'C3HHEH'
 
         df['HPE'] = 'abnormal' if any(map(str(file_names[i]).__contains__, abnormal_embs)) else 'normal'
 
@@ -80,11 +110,6 @@ def test_radiomic_plotting():
 
     for org in data.index.get_level_values('org').unique():
         data[data.index.get_level_values('org') == org].to_csv(str(org_dir)+"/results_" + str(org)+ ".csv")
-
-
-
-
-
 
     data.to_csv(line_file)
 
@@ -166,7 +191,7 @@ def test_radiomic_plotting():
     plt.savefig("E:/220607_two_way/g_by_back_data/radiomics_output/features/radiomics_2D_PaCMAP_C3H_map_v2.png")
     plt.close()
 
-    het_c3h_data = data[data['condition'] == 'WT_C3HHEH']
+    het_c3h_data = data[data['condition'] == 'HET_C3HHEH']
     fig, ax = plt.subplots(figsize=[56, 60])
     g = sns.lmplot(
         x="PaCMAP-2d-one", y="PaCMAP-2d-two",
@@ -200,6 +225,23 @@ def test_radiomic_plotting():
     plt.savefig("E:/220607_two_way/g_by_back_data/radiomics_output/features/radiomics_2D_PaCMAP_b6_map_v2.png")
     plt.close()
 
+    wt_f1_data = data[data['condition'] == 'WT_C57BL6N']
+    fig, ax = plt.subplots(figsize=[56, 60])
+    g = sns.lmplot(
+        x="PaCMAP-2d-one", y="PaCMAP-2d-two",
+        data=wt_f1_data,
+        # col_order=['normal', 'abnormal'],
+        # col='specimen',
+        # col_wrap=5,
+        hue="org",
+        palette='husl',
+        fit_reg=False)
+    g.set(ylim=(np.min(data['PaCMAP-2d-two']) - 10, np.max(data['PaCMAP-2d-two']) + 10),
+          xlim=(np.min(data['PaCMAP-2d-one']) - 10, np.max(data['PaCMAP-2d-one']) + 10))
+
+    plt.savefig("E:/220607_two_way/g_by_back_data/radiomics_output/features/radiomics_2D_PaCMAP_f1_map_v2.png")
+    plt.close()
+
     fig, ax = plt.subplots(figsize=[56, 60])
     g = sns.lmplot(
         x="PaCMAP-2d-one", y="PaCMAP-2d-two",
@@ -231,6 +273,23 @@ def test_radiomic_plotting():
           xlim=(np.min(data['PaCMAP-2d-one']) - 10, np.max(data['PaCMAP-2d-one']) + 10))
 
     plt.savefig("E:/220607_two_way/g_by_back_data/radiomics_output/features/radiomics_2D_PaCMAP_b6_hets_v2.png")
+    plt.close()
+
+    het_f1_data = data[data['condition'] == 'F1']
+    fig, ax = plt.subplots(figsize=[56, 60])
+    g = sns.lmplot(
+        x="PaCMAP-2d-one", y="PaCMAP-2d-two",
+        data=het_f1_data,
+        # col_order=['normal', 'abnormal'],
+        col='specimen',
+        col_wrap=5,
+        hue="org",
+        palette='husl',
+        fit_reg=False)
+    g.set(ylim=(np.min(data['PaCMAP-2d-two']) - 10, np.max(data['PaCMAP-2d-two']) + 10),
+          xlim=(np.min(data['PaCMAP-2d-one']) - 10, np.max(data['PaCMAP-2d-one']) + 10))
+
+    plt.savefig("E:/220607_two_way/g_by_back_data/radiomics_output/features/radiomics_2D_PaCMAP_f1_hets_v2.png")
     plt.close()
 
     fig, ax = plt.subplots(figsize=[56, 60])
@@ -363,13 +422,226 @@ def test_radiomic_plotting():
         plt.savefig("E:/220607_two_way/g_by_back_data/radiomics_output/wt_C3H_heatmap_"+str(org)+".png")
         plt.close()
 
+
+def test_BQ_concat():
+    _dir = Path("Z:/jcsmr/ROLab/Experimental data/Radiomics/Workflow design and trial results/Kyle Drover analysis/220617_BQ_norm_stage_full/sub/sub_normed_features.csv")
+    #_dir = Path("E:/220913_BQ_tsphere/inputs/features/")
+
+    # file_names = [spec for spec in common.get_file_paths(folder=_dir, extension_tuple=".csv")]
+    # file_names.sort()
+    #
+    # data = [pd.read_csv(spec, index_col=0).dropna(axis=1) for spec in file_names]
+    #
+    # data = pd.concat(
+    #     data,
+    #     ignore_index=False, keys=[os.path.splitext(os.path.basename(spec))[0] for spec in file_names],
+    #     names=['specimen', 'label'])
+    #
+    # data['specimen'] = data.index.get_level_values('specimen')
+    #
+    # _metadata = data['specimen'].str.split('_', expand=True)
+    #
+    #
+    #
+    # _metadata.columns = ['Date', 'Exp', 'Contour_Method', 'Tumour_Model', 'Position', 'Age',
+    #                                                                         'Cage_No.', 'Animal_No.']
+    #
+    #
+    #
+    #
+    # _metadata.reset_index(inplace=True, drop=True)
+    # data.reset_index(inplace=True, drop=True)
+    # features = pd.concat([_metadata, data], axis=1)
+    #
+    # features.index.name = 'scanID'
+    #
+    # print(features)
+    #
+    # print(str(_dir.parent / "full_results.csv"))
+    #
+    # features.to_csv(str(_dir.parent / "full_results.csv"))
+
+    features = pd.read_csv(_dir)
+    features = features[features.columns.drop(list(features.filter(regex="diagnostics")))]
+    features.drop(["scanID"], axis=1, inplace=True)
+    feature_reduction.main(features, org = None, rad_file_path = Path(_dir.parent / "full_results.csv"))
+
+def test_BQ_mach_learn():
+    _dir = Path("C:/test/features/")
+
+    file_names = [spec for spec in common.get_file_paths(folder=_dir, extension_tuple=".csv")]
+    file_names.sort()
+
+    data = [pd.read_csv(spec, index_col=0).dropna(axis=1) for spec in file_names]
+
+    data = pd.concat(
+        data,
+        ignore_index=False, keys=[os.path.splitext(os.path.basename(spec))[0] for spec in file_names],
+        names=['specimen', 'label'])
+
+    data['specimen'] = data.index.get_level_values('specimen')
+
+    _metadata = data['specimen'].str.split('_', expand=True)
+
+
+
+    _metadata.columns = ['Date', 'Exp', 'Contour_Method', 'Tumour_Model', 'Position', 'Age',
+                                                                            'Cage_No.', 'Animal_No.']
+
+
+
+
+    _metadata.reset_index(inplace=True, drop=True)
+    data.reset_index(inplace=True, drop=True)
+    features = pd.concat([_metadata, data], axis=1)
+
+    features.index.name = 'scanID'
+
+    print(features)
+
+    print(str(_dir.parent / "full_results.csv"))
+
+    features.to_csv(str(_dir.parent / "full_results.csv"))
+
+    feature_reduction.main(features, org = None, rad_file_path = Path(_dir.parent / "full_results.csv"))
+
+
+def test_BQ_mach_learn_non_tum():
+    _dir = Path("E:/220919_non_tum/features/")
+
+    file_names = [spec for spec in common.get_file_paths(folder=_dir, extension_tuple=".csv")]
+    file_names.sort()
+
+    data = [pd.read_csv(spec, index_col=0).dropna(axis=1) for spec in file_names]
+
+    data = pd.concat(
+        data,
+        ignore_index=False, keys=[os.path.splitext(os.path.basename(spec))[0] for spec in file_names],
+        names=['specimen', 'label'])
+
+    data['specimen'] = data.index.get_level_values('specimen')
+
+    _metadata = data['specimen'].str.split('_', expand=True)
+
+
+
+    _metadata.columns = ['Date', 'Exp', 'Contour_Method', 'Tumour_Model', 'Position', 'Age',
+                                                                            'Cage_No.', 'Animal_No.']
+
+
+
+
+    _metadata.reset_index(inplace=True, drop=True)
+    data.reset_index(inplace=True, drop=True)
+    features = pd.concat([_metadata, data], axis=1)
+
+    features.index.name = 'scanID'
+
+    print(features)
+
+    print(str(_dir.parent / "full_results.csv"))
+
+    features.to_csv(str(_dir.parent / "full_results.csv"))
+
+    feature_reduction.main(features, org = None, rad_file_path = Path(_dir.parent / "full_results.csv"))
+
+
+
+def test_BQ_mach_learn_batch_sp():
+    _dir = Path("E:/220913_BQ_tsphere/inputs/features/")
+
+    file_names = [spec for spec in common.get_file_paths(folder=_dir, extension_tuple=".csv")]
+    file_names.sort()
+
+    data = [pd.read_csv(spec, index_col=0).dropna(axis=1) for spec in file_names]
+
+    data = pd.concat(
+        data,
+        ignore_index=False, keys=[os.path.splitext(os.path.basename(spec))[0] for spec in file_names],
+        names=['specimen', 'label'])
+
+    data['specimen'] = data.index.get_level_values('specimen')
+
+    _metadata = data['specimen'].str.split('_', expand=True)
+
+
+
+    _metadata.columns = ['Date', 'Exp', 'Contour_Method', 'Tumour_Model', 'Position', 'Age',
+                                                                            'Cage_No.', 'Animal_No.']
+
+
+
+
+    _metadata.reset_index(inplace=True, drop=True)
+    data.reset_index(inplace=True, drop=True)
+    features = pd.concat([_metadata, data], axis=1)
+
+    features.index.name = 'scanID'
+
+    print(features)
+
+    print(str(_dir.parent / "full_results.csv"))
+
+    features.to_csv(str(_dir.parent / "full_results.csv"))
+
+    feature_reduction.main(features, org = None, rad_file_path = Path(_dir.parent / "full_results.csv"), batch_test=True)
+
+
+def test_BQ_concat_batch():
+    _dir = Path("Z:/jcsmr/ROLab/Experimental data/Radiomics/Workflow design and trial results/Kyle Drover analysis/220617_BQ_norm_stage_full/sub_normed_features.csv")
+    #_dir = Path("E:/220913_BQ_tsphere/inputs/features/")
+
+    # file_names = [spec for spec in common.get_file_paths(folder=_dir, extension_tuple=".csv")]
+    # file_names.sort()
+    #
+    # data = [pd.read_csv(spec, index_col=0).dropna(axis=1) for spec in file_names]
+    #
+    # data = pd.concat(
+    #     data,
+    #     ignore_index=False, keys=[os.path.splitext(os.path.basename(spec))[0] for spec in file_names],
+    #     names=['specimen', 'label'])
+    #
+    # data['specimen'] = data.index.get_level_values('specimen')
+    #
+    # _metadata = data['specimen'].str.split('_', expand=True)
+    #
+    #
+    #
+    # _metadata.columns = ['Date', 'Exp', 'Contour_Method', 'Tumour_Model', 'Position', 'Age',
+    #                                                                         'Cage_No.', 'Animal_No.']
+    #
+    #
+    #
+    #
+    # _metadata.reset_index(inplace=True, drop=True)
+    # data.reset_index(inplace=True, drop=True)
+    # features = pd.concat([_metadata, data], axis=1)
+    #
+    # features.index.name = 'scanID'
+    #
+    # print(features)
+    #
+    # print(str(_dir.parent / "full_results.csv"))
+    #
+    # features.to_csv(str(_dir.parent / "full_results.csv"))
+
+    features = pd.read_csv(_dir)
+    features = features[features.columns.drop(list(features.filter(regex="diagnostics")))]
+    features.drop(["scanID"], axis=1, inplace=True)
+    feature_reduction.main(features, org = None, rad_file_path = Path(_dir.parent / "full_results.csv"), batch_test=True)
+
+
+
+
+
+
 @pytest.mark.skip
 def test_feat_reduction():
     feature_reduction.main()
 
 def test_mach_learn_pipeline():
+    lama_machine_learning.ml_job_runner("E:/230129_bq_tester/norm_methods/", n_sample=True)
 
-    machine_learning.ml_job_runner("E:/220607_two_way/g_by_back_data/radiomics_output/organs/")
 
 @pytest.mark.skip
 def test_radiomic_org_plotting():
@@ -452,3 +724,89 @@ def test_radiomic_org_plotting():
         plt.close()
 
 
+def test_get_rad_data_for_perm():
+    _dir = Path("E:/221122_two_way/g_by_back_data/radiomics_output")
+
+    wt_dir = Path("E:/221122_two_way/g_by_back_data/baseline")
+
+    mut_dir = Path("E:/221122_two_way/g_by_back_data/mutants")
+
+    treat_dir = Path("E:/221122_two_way/g_by_back_data/treatment")
+
+    inter_dir = Path("E:/221122_two_way/g_by_back_data/mut_treat")
+
+    results = get_radiomics_data(_dir, wt_dir, mut_dir, treat_dir, inter_dir)
+
+    results.to_csv(str(_dir/"test_dataset.csv"))
+
+def test_permutation_stats():
+    """
+    Run the whole permutation based stats pipeline.
+    Copy the output from a LAMA registrations test run, and increase or decrease the volume of the mutants so we get
+    some hits
+
+    """
+    lama_permutation_stats.run(stats_cfg)
+
+def test_sns_clustermap():
+    url = "https://raw.githubusercontent.com/dorkylever/LAMA/master/lama/tests/clustermap_data.csv"
+    X = pd.read_csv(url, index_col=0)
+    X.dropna(how='all', inplace=True)
+    X.fillna(1, inplace=True)
+    # replace missing values with 0
+    # replace infinite values with 0
+
+    print("Missing values:", X.isnull().sum().sum())
+    print("Infinite values:", np.isposinf(X).sum().sum() + np.isneginf(X).sum().sum())
+
+    # mean_data = X.apply(np.mean, axis=1)
+
+    # std_data = X.apply(np.std, axis=1)
+
+    # constant_rows = X.apply(lambda row: row.nunique() == 1, axis=1)
+
+    # X = X[~constant_rows]
+
+    # na_mean = mean_data[mean_data.isna().any()]
+
+    # na_std = std_data[std_data.iszero().any()]
+
+    cg = sns.clustermap(X,
+                        metric="euclidean",
+                        cmap=sns.diverging_palette(250, 15, l=70, s=400, sep=1, n=512, center="light",
+                                                   as_cmap=True),
+                        cbar_kws={'label': 'mean volume ratio'}, square=True,
+                        center=1,
+                        figsize=[30, len(X) * 0.3])
+
+    # Calculate the mean and standard deviation of each variable
+    # X.columns = [col.rsplit('_', 3)[-1] for col in X.columns]
+
+    plt.tight_layout()
+
+    plt.savefig("E:/221122_two_way/permutation_stats/rad_perm_output/two_way/easy_fig.png")
+    plt.close()
+
+    X = X.to_numpy()
+
+    print(np.isnan(X).any() | np.isinf(X).any())
+    #
+    print(X)
+    mu = np.mean(X, axis=0)
+    sigma = np.std(X, axis=0)
+    #
+    #
+    print(np.all(sigma))
+    #
+    # # Calculate the z-score matrix
+    Z = (X - mu) / sigma
+    print(Z)
+    #
+    # # Calculate the Euclidean distance matrix
+    d = np.zeros((Z.shape[0], Z.shape[0]))
+    for i in range(Z.shape[0]):
+        for j in range(Z.shape[0]):
+            d[i, j] = np.sqrt(np.sum((Z[i, :] - Z[j, :]) ** 2))
+    #
+    print(d)
+    print(np.isnan(d).any() | np.isinf(d).any())

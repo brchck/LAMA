@@ -30,7 +30,9 @@ allowed_cfg_keys = [
     'norm_to_whole_embryo_vol',
     'qc_file',
     'voxel_size',
-    'two_way'
+    'two_way',
+    'rad_dir',
+    'spec_fdr'
 ]
 
 
@@ -60,7 +62,7 @@ def run(cfg_path):
         return resolved
 
     with open(cfg_path, 'r') as fh:
-        cfg = yaml.load(fh)
+        cfg = yaml.load(fh, Loader=yaml.FullLoader)
 
     for key in cfg.keys():
         if key not in allowed_cfg_keys:
@@ -88,17 +90,22 @@ def run(cfg_path):
     inter_dir = p(cfg['interaction_dir'])
     two_way = bool(cfg.get('two_way', False))
 
+    spec_fdr = float(cfg.get('spec_fdr', 0.2))
+
+    rad_dir = p(cfg.get('rad_dir'))
     run_permutation_stats.run(wt_dir=wt_dir,
                               mut_dir=mut_dir,
                               out_dir=out_dir,
                               num_perms=n_perm,
                               label_info=label_meta,
+                              specimen_fdr=spec_fdr,
                               label_map_path=label_map,
                               normalise_to_whole_embryo=wev_norm, qc_file=qc_file,
                               voxel_size=voxel_size,
                               two_way=two_way,
                               treat_dir=treat_dir,
-                              inter_dir=inter_dir
+                              inter_dir=inter_dir,
+                              rad_dir=rad_dir
     )
 
 

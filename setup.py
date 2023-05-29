@@ -9,9 +9,9 @@ exec(open(version_file).read())
 
 
 setup(
-    name='lama_phenotype_detection',
-    download_url=f'https://github.com/dorkylever/LAMA/archive/refs/tags/1.0.0.tar.gz',
-    version="lama_phenotype_detection-1.0.0",
+    name='dorkylever_lama_phenotype_detection',
+    download_url=f'https://github.com/dorkylever/LAMA/archive/refs/tags/1.0.1.tar.gz',
+    version="1.0.1",
     packages=find_packages(exclude=("dev")),
     package_data={'': ['current_commit',
                        'stats/rscripts/lmFast.R',
@@ -19,35 +19,40 @@ setup(
     include_package_data=True,
     install_requires=[
         'appdirs',
+        'setuptools==59.8.0',
         'matplotlib>=2.2.0',
-        'numpy>=1.20',
+        'numpy==1.21.5',
         'pandas>=1.1.0',
-        'scikit-learn>=1.1.0',
+        'scikit-learn==1.0.2',
         'scipy>=1.1.0',
         'scikit-image==0.17.2',
         'seaborn>=0.9.0',
         'statsmodels>=0.9.0',
         'PyYAML>=3.13',
+        'catboost==1.1.0',
         'SimpleITK>=2.1.0',
         'pyradiomics>=3.0.1',
         'threadpoolctl==3.1.0',
+        'imbalanced-learn==0.9.0',
         'raster-geometry',
         'filelock',
-        'psutil',
+        'psutil==5.9.3',
         'plotly',
-        'logzero',
+        'logzero==1.7.0',
         'addict',
         'toml',
         'pynrrd',
         'pytest',
-        'mlxtend',
         'tqdm',
         'gitpython',
         'pacmap',
         'shap',
-        'imblearn',
         'joblib',
-        'wheel'
+        'wheel',
+        'torch',
+        'numexpr',
+        'bottleneck',
+        'cuda-python==11.8.1'
     ],
     extras_require={
         'dev': ['h5py'],
@@ -76,7 +81,8 @@ setup(
                 'lama_img_info=lama.utilities.lama_img_info:main',
                 'lama_ark_imp_pro=lama.scripts.lama_ark_img_pro:main',
                 'lama_radiomics_runner=lama.scripts.lama_radiomics_runner:main',
-                'lama_two_way_plotter=lama.scripts.two_way_plotter:main'
+                'lama_two_way_plotter=lama.scripts.two_way_plotter:main',
+                'lama_machine_learning=lama.scripts.lama_machine_learning:main'
             ]
         },
 )

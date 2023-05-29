@@ -25,29 +25,29 @@ from lama.common import cfg_load
 # from lama.tests import (stats_config_dir)
 
 wt_dir = Path(
-    "E:/Bl6_data/211014_g_by_back/g_by_back_data/baseline")
+    "E:/220607_two_way_cp/g_by_back_data/baseline")
 mut_dir = Path(
-    "E:/Bl6_data/211014_g_by_back/g_by_back_data/mutants")
+    "E:/220607_two_way_cp/g_by_back_data/mutants")
 treat_dir = Path(
-    "E:/Bl6_data/211014_g_by_back/g_by_back_data/treatment")
+    "E:/220607_two_way_cp/g_by_back_data/treatment")
 inter_dir = Path(
-    "E:/Bl6_data/211014_g_by_back/g_by_back_data/mut_treat")
+    "E:/220607_two_way_cp/g_by_back_data/mut_treat")
 
 cfg = Path(
-    "E:/Bl6_data/211014_g_by_back/g_by_back_data/generate_data.toml")
+    "E:/220607_two_way_cp/g_by_back_data/generate_data.toml")
 
 stats_cfg = Path(
-    "E:/Bl6_data/211014_g_by_back/stats_with_BH_correction/stats.toml")
+    "E:/220607_two_way_cp/stats_with_BH_correction/stats.toml")
 
 target_dir = Path(
-    "E:/Bl6_data/211014_g_by_back/target")
+    "E:/220607_two_way_cp/target")
 
-stats_output = Path("E:/Bl6_data/211014_g_by_back/stats_with_BH_correction/stats_output")
+stats_output = Path("E:/220607_two_way_cp/stats_with_BH_correction/")
 
 lines_to_process = None
 
 
-@pytest.mark.skip
+
 def test_lama_job_runner():
     """
     Test the lama job runner which was made to utilise multiple machines or the grid.
@@ -60,14 +60,14 @@ def test_lama_job_runner():
 
     print(f"\n{'#' * 8} Doing config {cfg.name} {'#' * 8}")
 
-    lama_job_runner.lama_job_runner(cfg, wt_dir, make_job_file=True, log_level=logging.ERROR)
-    lama_job_runner.lama_job_runner(cfg, wt_dir, log_level=logging.ERROR)
+    #lama_job_runner.lama_job_runner(cfg, wt_dir, make_job_file=True, log_level=logging.ERROR)
+    #lama_job_runner.lama_job_runner(cfg, wt_dir, log_level=logging.ERROR)
 
-    lama_job_runner.lama_job_runner(cfg, mut_dir, make_job_file=True, log_level=logging.ERROR)
-    lama_job_runner.lama_job_runner(cfg, mut_dir, log_level=logging.ERROR)
+    #lama_job_runner.lama_job_runner(cfg, mut_dir, make_job_file=True, log_level=logging.ERROR)
+    #lama_job_runner.lama_job_runner(cfg, mut_dir, log_level=logging.ERROR)
 
-    lama_job_runner.lama_job_runner(cfg, treat_dir, make_job_file=True, log_level=logging.ERROR)
-    lama_job_runner.lama_job_runner(cfg, treat_dir, log_level=logging.ERROR)
+    #lama_job_runner.lama_job_runner(cfg, treat_dir, make_job_file=True, log_level=logging.ERROR)
+    #lama_job_runner.lama_job_runner(cfg, treat_dir, log_level=logging.ERROR)
 
     lama_job_runner.lama_job_runner(cfg, inter_dir, make_job_file=True, log_level=logging.ERROR)
     lama_job_runner.lama_job_runner(cfg, inter_dir, log_level=logging.ERROR)
@@ -110,9 +110,8 @@ def test_radiomics():
     except KeyError:
         norm_meths = None
 
-    radiomics_job_runner(target_dir, labs_of_int=labs_of_int,
-                         normalisation_label=norm_label,
-                         norm_method=norm_meths, spherify=spherify, ref_vol_path=ref_vol_path)
+    radiomics_job_runner(target_dir, labs_of_int=labs_of_int, norm_method=norm_meths, spherify=spherify,
+                         ref_vol_path=ref_vol_path)
 
 
 
@@ -205,7 +204,7 @@ def test_two_way_intensities():
             break
 
 
-@pytest.mark.skip
+
 def test_two_way_stats():
     """
     tests the two_ways_stats component
@@ -217,4 +216,4 @@ def test_two_way_stats():
     -------
 
     """
-    lama_stats.run(stats_cfg, wt_dir, mut_dir, stats_output, treat_dir, inter_dir)
+    lama_stats.run(stats_cfg, wt_dir, mut_dir, stats_output, target_dir, treat_dir, inter_dir)

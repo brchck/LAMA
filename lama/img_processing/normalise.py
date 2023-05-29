@@ -111,8 +111,8 @@ class NonRegMaskNormalise(Normaliser):
         vol_paths.sort(key=lambda x: os.path.basename(x))
         mask_paths.sort(key=lambda x: os.path.basename(x))
 
-        vols = [common.LoadImage(_path) for _path in vol_paths]
-        masks = [common.LoadImage(_path) for _path in mask_paths]
+        vols = [common.LoadImage(_path).img for _path in vol_paths]
+        masks = [common.LoadImage(_path).img for _path in mask_paths]
 
         return vols, masks
 
@@ -131,12 +131,11 @@ class NonRegMaskNormalise(Normaliser):
         '''
         logging.info("Creating_otsu_masks")
         o_masks = [None]* len(volumes)
-        print(len(volumes))
         if ~isinstance(volumes, list):
             # stops code from breaking in radiomics runner
             volumes = [volumes]
         for i, vol in enumerate(volumes):
-            print(vol)
+
             Otsu = sitk.OtsuThresholdImageFilter()
 
             inv_mask = Otsu.Execute(vol)
@@ -156,12 +155,9 @@ class NonRegMaskNormalise(Normaliser):
             o_masks[i] = dilate.Execute(o_mask)
             o_masks[i].CopyInformation(vol)
 
-            #o_dir = file_names[0].parent.parent / "otsu_thresholds"
-            #os.makedirs(o_dir, exist_ok=True)
-            #sitk.WriteImage(o_mask, str(Path(o_dir) / os.path.basename(file_names[i])))
         return o_masks
 
-    def add_reference(self, ref: np.ndarray, ref_mask: np.ndarray):
+    def add_reference(self, ref: sitk.SimpleITK.Image, ref_mask: sitk.SimpleITK.Image):
         """
         Add the
 
@@ -176,9 +172,9 @@ class NonRegMaskNormalise(Normaliser):
         # so when we add the reference, we're not storing the image
         # so we can slice it to make computation time quicker
         means = []
-        for i, vol in enumerate(ref):
-            img = sitk.GetArrayFromImage(ref[i].img)
-            mask = sitk.GetArrayFromImage(ref_mask[i].img)
+        def do_norm(vol, ref_mask):
+            img = sitk.GetArrayFromImage(vol)
+            mask = sitk.GetArrayFromImage(ref_mask)
 
             s = ndimage.find_objects(mask)[0]
 
@@ -196,6 +192,12 @@ class NonRegMaskNormalise(Normaliser):
 
             means.append(np.mean(img))
 
+        if isinstance(ref, list):
+            for i, vol in enumerate(ref):
+                do_norm(vol, ref_mask[i])
+
+        else:
+            do_norm(ref, ref_mask)
 
         self.reference_mean = np.mean(means)
 
@@ -222,8 +224,14 @@ class NonRegMaskNormalise(Normaliser):
         logging.info('Normalising images to mask')
 
         for i, vol in enumerate(volumes):
-            img_a = sitk.GetArrayFromImage(vol.img)
-            mask_a = sitk.GetArrayFromImage(masks[i].img)
+            if isinstance(vol, sitk.SimpleITK.Image):
+                img_a = sitk.GetArrayFromImage(vol)
+            else:
+                img_a = sitk.GetArrayFromImage(vol.img)
+            if isinstance(masks[i], sitk.SimpleITK.Image):
+                mask_a = sitk.GetArrayFromImage(masks[i])
+            else:
+                mask_a = sitk.GetArrayFromImage(masks[i].img)
             t = tempfile.TemporaryFile(dir=temp_dir)
             img_a = img_a[mask_a == 1]
             arr_for_mean = np.memmap(t, dtype=img_a.dtype, mode='w+', shape=img_a.shape)
@@ -245,8 +253,7 @@ class NonRegMaskNormalise(Normaliser):
                 else:
                     mean_difference = np.mean(arr_for_mean) - self.reference_mean
                     subtract = sitk.SubtractImageFilter()
-                    img = vol.img
-                    volumes[i] = subtract.Execute(img, float(mean_difference))
+                    volumes[i] = subtract.Execute(vol, float(mean_difference))
 
             except TypeError:  # Could be caused by imgarr being a short
                 # fold difference should not be here
@@ -295,15 +302,18 @@ class IntensityHistogramMatch(Normaliser):
 
         # Only need to load the ref volume once
         matcher = sitk.HistogramMatchingImageFilter()
-        matcher.SetThresholdAtMeanIntensity(True)
+        matcher.SetNumberOfHistogramLevels(65536)
+        matcher.SetNumberOfMatchPoints(20000)
+        #matcher.SetThresholdAtMeanIntensity(True)
 
         for i, img in enumerate(volumes):
             try:
                 volumes[i] = matcher.Execute(img, ref_vol)
-            except RuntimeError: # needs casting
-                #img = sitk.Cast(img, sitk.sitkFloat32)
-                #ref_vol = sitk.Cast(ref_vol, sitk.sitkFloat32)
+            except RuntimeError:  # needs casting
+                img = sitk.Cast(img, sitk.sitkFloat32)
+                ref_vol = sitk.Cast(ref_vol, sitk.sitkFloat32)
                 volumes[i] = matcher.Execute(img, ref_vol)
+
 
 class IntensityN4Normalise(Normaliser):
     """

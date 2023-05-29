@@ -22,6 +22,7 @@ import pandas as pd
 import statsmodels.formula.api as smf
 
 from lama import common
+from tqdm import tqdm
 
 LM_SCRIPT = str(common.lama_root_dir / 'stats' / 'rscripts' / 'lmFast.R')
 
@@ -198,7 +199,7 @@ def lm_sm(data: np.ndarray, info: pd.DataFrame, plot_dir: Path = None,
     d = pd.DataFrame(data, index=info.index, columns=[f'x{x}' for x in range(data.shape[1])])
     df = pd.concat([d, info], axis=1)  # Data will be given numberic labels
 
-    for col in range(data.shape[1]):
+    for col in tqdm(range(data.shape[1])):
 
         if not df[f'x{col}'].any():
             p = np.nan
@@ -207,14 +208,17 @@ def lm_sm(data: np.ndarray, info: pd.DataFrame, plot_dir: Path = None,
             if two_way:
                 # two way model - if its just the geno or treat comparison; the one-factor col will
                 # be ignored
-                # for some simulations smf is being a cunt and is returning the text in pvalues.
+                # for some simulations smf is being a pain and is returning the text in pvalues.
 
                 fit = smf.ols(formula=f'x{col} ~ genotype * treatment + staging', data=df, missing='drop').fit()
 
                 # get all pvals except intercept and staging
 
+
                 p = fit.pvalues[~fit.pvalues.index.isin(['Intercept', 'staging'])]
                 t = fit.tvalues[~fit.tvalues.index.isin(['Intercept', 'staging'])]
+
+
             else:
                 fit = smf.ols(formula=f'x{col} ~ genotype + staging', data=df, missing='drop').fit()
                 p = fit.pvalues['genotype[T.wt]']
@@ -223,15 +227,19 @@ def lm_sm(data: np.ndarray, info: pd.DataFrame, plot_dir: Path = None,
         tvals.append(t)
 
     # print(dir(fit))
-
     p_all = np.array(pvals)
+
     # debugging which may not matter
 
     # weird output from smf.ols.fit.pvalues
     if len(np.shape(p_all)) == 1:
         # Coerces all the data to be the right shape
 
-        p_all = np.reshape(p_all, (187, 1))
+        # so Neil's atlas has 187 organs but the rad data has > 187
+        #TODO: test with non-rad data and see if you can use np.shape(data)[1]
+        p_all = np.reshape(p_all, (np.shape(data)[1], 1))
+
+            #Kyle: what is this?
 
     # print(type(p_all[0][0]), p_all[0][0])
     if isinstance(p_all[0][0], pd.Series):
@@ -245,7 +253,7 @@ def lm_sm(data: np.ndarray, info: pd.DataFrame, plot_dir: Path = None,
             p_all = [np.array(3*[np.nan]) if np.isnan(org).any() else org for org in p_all]
             p_all = np.vstack(p_all)
         else:
-            p_all = np.reshape(p_all, (187, 1))
+            p_all = np.reshape(p_all, (np.shape(data)[1], 1))
 
     t_all = np.negative(np.array(tvals))  # The tvaue for genotype[T.mut] is what we want
 

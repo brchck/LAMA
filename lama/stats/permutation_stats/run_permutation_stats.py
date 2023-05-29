@@ -83,6 +83,65 @@ def write_specimen_info(wt_wev, mut_wev, outfile):
     mut_wev.to_csv(outfile)
 
 
+def get_radiomics_data(rad_dir: Path, wt_dir: Path, mut_dir: Path, treat_dir: Path, inter_dir: Path) -> pd.DataFrame:
+    """
+    Given a root registration directory, collate all the organ volume CSVs into one file.
+    Write out the combined organ volume CSV into the root registration directory.
+
+    Parameters
+    ----------
+    root_dir
+        The path to the root registration directory
+
+    Returns
+    -------
+    The combined data frame of all the organ volumes
+    specimen id in index organs in rows
+    """
+
+
+
+    # get the features_per_embryo and convert it into per organs
+    feature_dir = rad_dir / "features"
+    #common.gather_rad_data(feature_dir)
+
+    org_dir = rad_dir / "organs"
+
+    # get the organ data and load it as one massive file
+    file_names = [spec for spec in common.get_file_paths(folder=org_dir, extension_tuple=".csv") if "0." in str(spec)]
+    file_names.sort()
+    df_list = []
+
+
+    staging = pd.concat([get_staging_data(_dir) for _dir in [wt_dir, mut_dir, treat_dir, inter_dir]]).rename(
+        columns={'value': 'staging'})
+
+    for org_name in file_names:
+        # read dataset
+        d = pd.read_csv(org_name, index_col=0).dropna(axis=1)
+        # tag the columns with the organ_number
+        org = d.org[0]
+        d.drop(columns=['HPE', 'genotype', 'background', 'org'], inplace=True)
+
+        d.set_axis([col + '__' + str(org) for col in d.columns], axis=1, inplace=True)
+        d = d.reindex(staging.index)
+        d.divide(staging['staging'])
+        df_list.append(d)
+
+    # horizontal merge - hope it works
+    data = pd.concat(df_list, axis=1)
+
+
+
+
+
+    data = pd.concat([data, staging], axis=1)
+
+
+
+    return data
+
+
 def get_organ_volume_data(root_dir: Path) -> pd.DataFrame:
     """
     Given a root registration directory, collate all the organ volume CSVs into one file.
@@ -319,7 +378,7 @@ def annotate(thresholds: pd.DataFrame,
 
             wt_ovs = label_organ_vol[label_organ_vol.line == 'baseline'][f'x{label}']
 
-            if (two_way|main_of_two_way):
+            if (two_way | main_of_two_way):
                 # I think this is the only way to get the combs....
 
                 mut_ovs = label_organ_vol[label_organ_vol.line == 'mutants'][f'x{label}']
@@ -342,15 +401,11 @@ def annotate(thresholds: pd.DataFrame,
                     num_ovs = mut_ovs
                     dem_ovs = wt_ovs
 
-
                 # Specimen level - overwrite the num_ovs to be the single emb of interest
                 if not is_line_level and two_way:
                     num_ovs = label_organ_vol[label_organ_vol.index == row.index[0]][f'x{label}']
                 elif not is_line_level and main_of_two_way:
                     num_ovs = label_organ_vol[label_organ_vol.index == spec_name[0]][f'x{label}']
-
-
-
 
                 # This is weird but if I don't do this my values are inverted the wrong way....
                 df.loc[label, 'mean_vol_ratio'] = num_ovs.mean() / dem_ovs.mean()
@@ -367,7 +422,6 @@ def annotate(thresholds: pd.DataFrame,
                     df.loc[label, 'cohens_d'] = cd
 
         output_name = f'{id_}_organ_volumes_{str(date.today())}.csv'
-
 
         line_output_dir = lines_root_dir / line
         line_output_dir.mkdir(exist_ok=True)
@@ -491,7 +545,8 @@ def prepare_data(wt_organ_vol: pd.DataFrame,
                  normalise_to_whole_embryo=False,
                  qc_file: Path = None,
                  two_way_data: list = [],
-                 two_way: bool = False) -> pd.DataFrame:
+                 two_way: bool = False,
+                 rad_data: bool = False) -> pd.DataFrame:
     """
     Merge the mutant and wildtype dtaframes
     Optionally normalise to staging metric (Usually whole embryo volume)
@@ -516,7 +571,6 @@ def prepare_data(wt_organ_vol: pd.DataFrame,
         # Now do essentially the same stuff as wt and muts
         treat_staging.rename(columns={'value': 'staging'}, inplace=True)
         inter_staging.rename(columns={'value': 'staging'}, inplace=True)
-
 
     else:
         # just the one-way
@@ -561,9 +615,9 @@ def prepare_data(wt_organ_vol: pd.DataFrame,
         if 'no_analysis' in label_meta:
             # If we have a no_analysis column, drop labels that are flagged
 
-            flagged_lables = label_meta[label_meta.no_analysis == True].index
+            flagged_labels = label_meta[label_meta.no_analysis == True].index
 
-            data.drop(columns=[f'x{x}' for x in flagged_lables if f'x{x}' in data], inplace=True)
+            data.drop(columns=[f'x{x}' for x in flagged_labels if f'x{x}' in data], inplace=True)
 
     # QC-flagged organs from specimens specified in QC file are set to None
     if qc_file:
@@ -597,7 +651,8 @@ def run(wt_dir: Path,
         voxel_size: float = 1.0,
         two_way: bool = False,
         treat_dir: Path = None,
-        inter_dir: Path = None):
+        inter_dir: Path = None,
+        rad_dir: Path = None):
     """
     Run the permutation-based stats pipeline
 
@@ -661,7 +716,12 @@ def run(wt_dir: Path,
     # data
     # index: spec_id
     # cols: label_nums, with staging and line columns at the end
-    data = prepare_data(wt_organ_vol,
+    if rad_dir:
+        data = get_radiomics_data(rad_dir, wt_dir, mut_dir, treat_dir, inter_dir)
+        data.to_csv(out_dir / 'radiomics_data.csv')
+
+    else:
+        data = prepare_data(wt_organ_vol,
                         wt_staging,
                         mut_organ_vol,
                         mut_staging,
@@ -670,6 +730,10 @@ def run(wt_dir: Path,
                         qc_file=qc_file,
                         two_way=two_way,
                         two_way_data=two_way_data)
+        data.to_csv(out_dir / 'input_data.csv')
+    # get rad data
+
+
 
     # Make plots
     # data_for_plots = data.copy()
@@ -683,7 +747,7 @@ def run(wt_dir: Path,
     # make_plots(data_for_plots, label_info, lines_root_dir, voxel_size=voxel_size)
 
     # Keep a record of the input data used in the analsysis
-    data.to_csv(out_dir / 'input_data.csv')
+
 
     # Keep raw data for plotting
     # raw_wt_vols = wt_organ_vol.copy()   # These includes QCd speciemns need to remove
@@ -736,11 +800,15 @@ def run(wt_dir: Path,
         specimen_inter_alt = spec_alt[spec_alt['3'].str.len() == 3]
         specimen_main_alt = spec_alt[spec_alt['3'].str.len() == 1]
 
-        # TODO: Don't hard-code this
+        # so firstly let's get the names and conditions from the data
+        group_info = data['line']
 
-        specimen_geno_alt = specimen_main_alt[specimen_main_alt.index.str.contains("het")]
-        specimen_treat_alt = specimen_main_alt[
-            (specimen_main_alt.index.str.contains("b6ku")) | (specimen_main_alt.index.str.contains("BL6"))]
+        # TODO: think whether to truly put mut_treat in main comparisons
+        mut_names = group_info[(group_info == 'mutants') | (group_info == 'mut_treat')].index
+        treat_names = group_info[(group_info == 'treatment') | (group_info == 'mut_treat')].index
+
+        specimen_geno_alt = specimen_main_alt[specimen_main_alt.index.isin(mut_names)]
+        specimen_treat_alt = specimen_main_alt[specimen_main_alt.index.isin(treat_names)]
 
         geno_alt_path = dists_out / 'specimen_geno_pvals.csv'
         treat_alt_path = dists_out / 'specimen_treat_pvals.csv'
@@ -761,7 +829,6 @@ def run(wt_dir: Path,
         geno_thresholds.to_csv(geno_thresholds_path)
         treat_thresholds.to_csv(treat_thresholds_path)
         inter_thresholds.to_csv(inter_thresholds_path)
-
 
     else:
         specimen_organ_thresholds = p_thresholds.get_thresholds(specimen_null, spec_alt, two_way=two_way)
